@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+
+	<head>
+		<meta charset="utf-8">
+		<title>Pick at Random</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+		<style type="text/css">
+			body {
+				margin: 1em auto;
+				max-width: 40em;
+				width: 88%;
+			}
+
+			pick-at-random [role="status"]:not(:empty) {
+				background-color: #f7f7f7;
+				border: 1px solid #e5e5e5;
+				border-radius: 0.25em;
+				padding: 0.5rem 1rem;
+				margin-top: 0.5rem;
+			}
+
+			pick-at-random li button {
+				background-color: transparent;
+				border: 0;
+				color: inherit;
+				margin-inline-start: 0.5rem;
+				padding: 0;
+			}
+
+			pick-at-random li button svg {
+				vertical-align: middle;
+			}
+
+			pick-at-random [clear-list] {
+				background-color: transparent;
+				border: 0;
+				font: inherit;
+				color: inherit;
+				padding: 0;
+
+			}
+		</style>
+	</head>
+
+	<body>
+
+		<h1>Pick at Random</h1>
+
+		<pick-at-random></pick-at-random>
+
+
+		<script>
+			customElements.define('pick-at-random', class extends HTMLElement {
+
+                // Instantiate the component
+
+            constructor () {
+
+                // Inherits parent class properties
+                super();
+
+                // Create a unique ID for the instance
+                this.uuid = `pick-${crypto.randomUUID()}`;
+
+                // Render our initial HTML
+                this.innerHTML = 
+                    `<form>
+                        <label for="${this.uuid}">Add an Item</label>
+                        <input type="text" id="${this.uuid}">
+                         <button>Add Item</button>
+                    </form>
+                    <ul></ul>
+					<p><button pick-item>Pick an Item</button> <button clear-list>or remove all items</button></p>
+					<div role="status" pick-result></div>`;
+
+                // Get our elements
+                this.form = this.querySelector('form');
+                this.list = this.querySelector('ul');
+				this.field = this.form.querySelector('input')
+				this.pickBtn = this.querySelector('[pick-item]');
+				this.result = this.querySelector('[pick-result]');
+
+                // Listen for event
+                this.form.addEventListener('submit', this);
+                this.addEventListener('click', this);
+
+				// Load list from localStorage
+				this.loadItems();
+
+                }
+
+				/**
+				 * Handle events
+				 * @param {Event} event The event object
+				 */
+				handleEvent (event) {
+					this[`on${event.type}`](event);
+				}
+
+
+				/**
+				 * Handle submit events
+				 * Is called at `this.form.addEventListener('submit', this);`
+				 * @param {Event} event The event object
+				 */
+				onsubmit (event) {
+					// Stop the form from reloading the page
+					event.preventDefault();
+
+					// If there's no item to add, bail
+					if (!this.field.value.trim().length) return;
+
+					// Create a list item
+					this.createListItem(this.field.value);
+
+					// Show a status message
+					this.showStatus(`"${this.field.value}" has been added to the list.`);
+
+					// Clear text from field
+					this.field.value = '';
+
+					// Save our list to localStorage
+					this.saveItems();
+				}
+
+				/**
+				 * Handle click events
+				 * Is called at `this.pickBtn.addEventListener('click', this);`
+				 * @param {Event} event The event object
+				 */
+				onclick (event) {
+					this.onPickButton(event);
+					this.onRemove(event);
+					this.onClearList(event);
+				}
+
+				/**
+				 * Clear the list of items
+				 * @param {Event} event The event object
+				 */
+				onClearList (event) {
+
+					if (!event || !event.target) return;
+
+					// Only run on [clear-list] button
+					if (!event.target.closest('[clear-list]')) return;
+
+					// Double check the user actually wants to do this
+					// Better is to use `dialoge`
+					let doClear = confirm('Are you sure you want to do this? It cannot be undone.');
+					if (!doClear) return;
+
+					// Clear the list
+					this.list.innerHTML = '';
+
+					// Remove items from localStorage
+					this.removeItems();
+
+				}
+
+				
+
+				/**
+				 * Handle remove button click
+				 * Is called at
+				 * @param {Event} event The event object
+				 */
+				onRemove (event) {
+
+					// Only run on remove buttons
+					let btn = event.target.closest('[data-remove]');
+					if (!btn) return;
+					let txt = btn.getAttribute('data-remove');
+
+					// Remove list item from the UI
+					let li = event.target.closest('li');
+					if (!li) return;
+					li.remove();
+
+					// Show remove message
+					this.showStatus(`"${txt}" has been removed from the list.`);
+					
+					// Save updated list
+					this.saveItems();
+				}
+
+				/**
+				 * Handle pick button click
+				 * Is called 
+				 * @param {Event} event The event object
+				 */
+				onPickButton (event) {
+
+					// Only run on [pick-item] button
+					if (!event.target.closest('[pick-item]')) return;
+
+					// Get all of the list items
+					// 24:00
+					let items = this.getItems();
+					if (!items.length) return;
+
+					// Randomize the items
+					this.shuffle(items);
+
+					this.result.textContent = `You picked ${items[0]}`;
+
+				}
+
+				/**
+				 * Create a list item
+				 * @param  {String} txt The text to add to the item
+				 */
+				createListItem (txt) {
+
+					// Create list item
+					let li = document.createElement('li');
+					li.textContent = txt;
+					this.list.append(li);
+
+					// Create remove button
+					let btn = document.createElement('button');
+					btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708"/></svg>`;
+					btn.setAttribute('aria-label', `Remove ${txt}`);
+					btn.setAttribute('data-remove', txt)
+					li.append(btn);
+
+					this.list.append(li);
+				}
+
+				/**
+				 * Get an array of user-added items 
+				 * @return {Array} The array of items
+				 */
+				getItems () {
+					let items = Array.from(this.list.querySelectorAll('li')).map(function (item) {
+						return item.textContent;
+					});
+					return items; 
+				}
+
+				/**
+				 * Save items to localStorage
+				 */
+				saveItems () {
+					let items = JSON.stringify(this.getItems());
+					localStorage.setItem('pickAtRandom', items);
+				}
+
+				/**
+				 * Remove items to localStorage
+				 */
+				 removeItems () {
+					localStorage.removeItem('pickAtRandom');
+				}
+
+				/**
+				 * Load saved list from localStorage
+				 */
+				loadItems () {
+					let items = JSON.parse(localStorage.getItem('pickAtRandom'));
+					if (!items) return;
+					for (let item of items) {
+						this.createListItem(item);
+					}
+				}
+
+				/**
+				 * Show a status message in the form
+				 * Is called at `this.showStatus(msg);`
+				 * @param  {String} msg The message to display
+				 */
+				showStatus (msg) {
+
+					// Create a notification
+					let notification = document.createElement('div');
+					notification.setAttribute('role', 'status');
+
+					// Inject it into the DOM
+					this.form.append(notification);
+
+					// Add text after it's in the UI
+					setTimeout(function () {
+						notification.textContent = msg;
+					}, 1);
+
+					// Remove it after 4 seconds
+					setTimeout(function () {
+						notification.remove();
+					}, 4000);
+				}
+
+				/**
+				 * Randomly shuffle an array
+				 * https://stackoverflow.com/a/2450976/1293256
+				 * @param  {Array} array The array to shuffle
+				 * @return {Array}       The shuffled array
+				 */
+				shuffle (array) {
+
+					let currentIndex = array.length;
+					let temporaryValue, randomIndex;
+
+					// While there remain elements to shuffle...
+					while (0 !== currentIndex) {
+						// Pick a remaining element...
+						randomIndex = Math.floor(Math.random() * currentIndex);
+						currentIndex -= 1;
+
+						// And swap it with the current element.
+						temporaryValue = array[currentIndex];
+						array[currentIndex] = array[randomIndex];
+						array[randomIndex] = temporaryValue;
+					}
+
+					return array;
+
+				}
+
+            });
+		</script>
+	</body>
+</html>
+
+<!-- 09:59 -->
+ <!-- https://www.youtube.com/watch?v=2S4-42vjZwY -->
+  <!-- https://www.youtube.com/watch?v=6pttzPPtiFA -->
+   <!-- https://www.youtube.com/watch?v=OAfoK5MTS5Q -->
+
+
+
